@@ -1,0 +1,66 @@
+                              Key Rotation
+
+
+Synopsis:
+
+This application helps re-encrypt s3 objects using a different key.
+The process is a spark job that executes on a EMR cluster, so it can scale to several million of objects.
+
+The process consists of a json mapping file, that controls the keys that should be used for re-encryption.
+The mapping file contains several lines of json objects.
+  * The json object contains the following keys
+  * bucket : The bucket whose objects need to be rotated.
+  * dpKekLabel : label to identify the encryption key to use (optional - key encrpytion key)
+  * dpKekVersion : version of the dpKekLabel (optional - label to tag the kek)
+  * prefix : The prefix within the bucket to encrypt. Use empty string for all
+
+for e.g one such entry in this file may look like this
+{"bucket":"super-imp-data","dpKekVersion":"versionFoo2","dpKekLabel":"labelFoo", "prefix":"encrypted/data/"}
+
+dpKekLabel and dpKekVersion are keys that are set in the objects userMetadata.
+These keys are mapped into another json object, the secrets json object. This secrets json has the
+structure like shown below
+{
+  "labelFoo" : { "versionFoo" : "a32charsecretencryptionkeystring", "versionFoo2" : "anotherversionsecretforthislabel" },
+  "labelBar" : { "versionBar" : "anothersecretencrkeyforthislabel" }
+}
+
+-----------------------------------------------
+
+Build:
+
+spark scala code using assembly plugin. So just run sbt assembly
+
+-----------------------------------------------
+
+Execution:
+
+For loading, standalone jar.
+java -cp rotate-keys.jar com.aws.rekey.UploadObjects <loader-s3-json>
+The loader-s3-json is a path in s3 that points to a pseudo json file, containing multiple lines of json
+objects, that are loaded from an un-encrypted format to encrypted format. Json object on each line consists
+of the following format
+{"loadBucket" : "<s3bucket>", "prefix" : "<directory in s3>", "keyArn" : "arn:aws:kmsblahblah/kmskeyid", "dpKekLabel" : "label for usermetadata", "dpKekVersion" : "versionforlabelforusermetadata"}
+
+At this point all keys are required.
+
+-----------------------------------------------
+
+
+For downloading encrypted object, standalone
+java -cp rotate-keys.jar com.aws.rekey.DownloadObject
+
+TODO parameterize
+
+-----------------------------------------------
+
+For rotation
+run as a spark job on the cluster
+for e.g
+  
+  spark-submit --conf spark.executor.instances=4 --class com.aws.rekey.RotateKeys rotate-keys.jar s3bucket/pathto/mapping.json
+
+  additional parameters per requirement based on tuning.
+
+
+
